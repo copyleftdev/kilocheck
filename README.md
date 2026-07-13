@@ -37,6 +37,17 @@ compiled snapshot is installed. It does not pretend that an unobserved address
 is safe. The next milestone adds verified Kilo Data release installation and
 the immutable memory-mapped lookup index.
 
+## Install a release
+
+Prebuilt archives for Linux x86-64, macOS Intel, macOS Apple Silicon, and
+Windows x86-64 are published on the
+[releases page](https://github.com/copyleftdev/kilocheck/releases). Every
+archive has a neighboring SHA-256 file and GitHub build-provenance attestation.
+
+```bash
+sha256sum --check kilo-v0.1.0-x86_64-unknown-linux-musl.tar.gz.sha256
+```
+
 ## Build
 
 ```bash
