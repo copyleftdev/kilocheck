@@ -1,8 +1,11 @@
 //! Stable domain contracts shared by `KiloCheck` frontends and engines.
 
-use std::net::IpAddr;
+use std::collections::BTreeSet;
+use std::fmt;
+use std::net::{AddrParseError, IpAddr};
+use std::str::FromStr;
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 pub const COMMAND_SCHEMA: &str = "kilo.command.v1";
 pub const OBSERVATION_SCHEMA: &str = "kilo.observation.v1";
@@ -94,6 +97,14 @@ impl From<IpAddr> for Target {
     }
 }
 
+impl FromStr for Target {
+    type Err = AddrParseError;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        value.parse::<IpAddr>().map(Self::from)
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum Disposition {
@@ -144,6 +155,16 @@ pub struct Observation {
     pub last_seen: Option<String>,
     pub evidence_hash: String,
     pub independence_group: String,
+}
+
+/// Count distinct underlying evidence origins rather than raw feed rows.
+#[must_use]
+pub fn independent_group_count(observations: &[Observation]) -> usize {
+    observations
+        .iter()
+        .map(|observation| observation.independence_group.as_str())
+        .collect::<BTreeSet<_>>()
+        .len()
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -256,8 +277,70 @@ pub struct SnapshotSummary {
     pub manifest_schema: String,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+pub struct SnapshotManifest {
+    pub schema: String,
+    pub snapshot_id: String,
+    pub created_at: String,
+}
+
+impl SnapshotManifest {
+    /// Parse and minimally validate the identity fields needed before activation.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ManifestError`] when the input is not valid JSON or an identity
+    /// field is empty.
+    pub fn parse_json(bytes: &[u8]) -> Result<Self, ManifestError> {
+        let manifest: Self = serde_json::from_slice(bytes).map_err(ManifestError::Json)?;
+        manifest.validate()?;
+        Ok(manifest)
+    }
+
+    fn validate(&self) -> Result<(), ManifestError> {
+        for (field, value) in [
+            ("schema", self.schema.as_str()),
+            ("snapshot_id", self.snapshot_id.as_str()),
+            ("created_at", self.created_at.as_str()),
+        ] {
+            if value.trim().is_empty() {
+                return Err(ManifestError::EmptyField(field));
+            }
+        }
+        Ok(())
+    }
+}
+
+#[derive(Debug)]
+pub enum ManifestError {
+    Json(serde_json::Error),
+    EmptyField(&'static str),
+}
+
+impl fmt::Display for ManifestError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Json(error) => write!(formatter, "invalid snapshot manifest JSON: {error}"),
+            Self::EmptyField(field) => {
+                write!(formatter, "snapshot manifest field {field:?} is empty")
+            }
+        }
+    }
+}
+
+impl std::error::Error for ManifestError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Self::Json(error) => Some(error),
+            Self::EmptyField(_) => None,
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
+    use std::error::Error;
+
     use super::*;
 
     #[test]
@@ -277,5 +360,44 @@ mod tests {
         assert!(!envelope.ok);
         assert!(envelope.data.is_none());
         assert_eq!(envelope.errors[0].code, "DATASET_MISSING");
+    }
+
+    #[test]
+    fn manifest_rejects_each_empty_identity_field() {
+        for (field, json) in [
+            (
+                "schema",
+                br#"{"schema":" ","snapshot_id":"abc","created_at":"now"}"#.as_slice(),
+            ),
+            (
+                "snapshot_id",
+                br#"{"schema":"v1","snapshot_id":"","created_at":"now"}"#.as_slice(),
+            ),
+            (
+                "created_at",
+                br#"{"schema":"v1","snapshot_id":"abc","created_at":"\n"}"#.as_slice(),
+            ),
+        ] {
+            let error = SnapshotManifest::parse_json(json).expect_err("empty field must fail");
+            assert!(matches!(error, ManifestError::EmptyField(actual) if actual == field));
+        }
+    }
+
+    #[test]
+    fn manifest_errors_preserve_diagnostic_context() {
+        let json_error = SnapshotManifest::parse_json(b"not-json").expect_err("invalid JSON");
+        assert!(
+            json_error
+                .to_string()
+                .starts_with("invalid snapshot manifest JSON:")
+        );
+        assert!(json_error.source().is_some());
+
+        let field_error = ManifestError::EmptyField("snapshot_id");
+        assert_eq!(
+            field_error.to_string(),
+            "snapshot manifest field \"snapshot_id\" is empty"
+        );
+        assert!(field_error.source().is_none());
     }
 }

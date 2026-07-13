@@ -9,9 +9,8 @@ use std::time::Instant;
 use clap::{Parser, Subcommand, ValueEnum};
 use kilo_core::{
     Capabilities, CheckResult, CommandEnvelope, DatasetStatus, Diagnostic, STATUS_SCHEMA,
-    SnapshotSummary,
+    SnapshotManifest, SnapshotSummary,
 };
-use serde::Deserialize;
 use serde::Serialize;
 
 const COMMAND_SCHEMA_JSON: &str = include_str!("../../../schemas/kilo.command.v1.json");
@@ -64,13 +63,6 @@ enum SchemaName {
     Command,
     Observation,
     Status,
-}
-
-#[derive(Debug, Deserialize)]
-struct InstalledManifest {
-    schema: String,
-    snapshot_id: String,
-    created_at: String,
 }
 
 fn main() -> ExitCode {
@@ -267,10 +259,10 @@ fn schema(name: SchemaName) -> ExitCode {
     ExitCode::SUCCESS
 }
 
-fn read_manifest(path: &Path) -> Result<InstalledManifest, String> {
+fn read_manifest(path: &Path) -> Result<SnapshotManifest, String> {
     let bytes =
         fs::read(path).map_err(|error| format!("cannot read {}: {error}", path.display()))?;
-    serde_json::from_slice(&bytes)
+    SnapshotManifest::parse_json(&bytes)
         .map_err(|error| format!("cannot parse {}: {error}", path.display()))
 }
 
