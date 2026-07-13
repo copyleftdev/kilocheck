@@ -1,16 +1,17 @@
+use std::collections::BTreeMap;
 use std::env;
 use std::ffi::OsString;
-use std::fs;
 use std::net::IpAddr;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::process::ExitCode;
 use std::time::Instant;
 
 use clap::{Parser, Subcommand, ValueEnum};
 use kilo_core::{
-    Capabilities, CheckResult, CommandEnvelope, DatasetStatus, Diagnostic, STATUS_SCHEMA,
-    SnapshotManifest, SnapshotSummary,
+    Capabilities, CheckResult, CommandEnvelope, DatasetStatus, Diagnostic, OBSERVATION_SCHEMA,
+    Observation, Provenance, STATUS_SCHEMA, SnapshotSummary, Target, derive_verdict,
 };
+use kilo_dataset::{UpdateOptions, active_snapshot_dir, open_active, update};
 use serde::Serialize;
 
 const COMMAND_SCHEMA_JSON: &str = include_str!("../../../schemas/kilo.command.v1.json");
@@ -49,6 +50,24 @@ enum Command {
     },
     /// Report local dataset installation and integrity state.
     Status,
+    /// Download, verify, compile, and atomically activate Kilo Data releases.
+    Update {
+        /// Read release archives and checksum files from a local directory.
+        #[arg(long)]
+        offline_dir: Option<PathBuf>,
+
+        /// Install only the stable base dataset without the rolling edge overlay.
+        #[arg(long)]
+        no_edge: bool,
+
+        /// Override the stable archive URL (intended for mirrors and testing).
+        #[arg(long, hide = true)]
+        base_url: Option<String>,
+
+        /// Override the rolling edge archive URL (intended for mirrors and testing).
+        #[arg(long, hide = true)]
+        edge_url: Option<String>,
+    },
     /// Describe commands, schemas, guarantees, and exit codes.
     Capabilities,
     /// Print a stable JSON Schema.
@@ -67,11 +86,24 @@ enum SchemaName {
 
 fn main() -> ExitCode {
     let cli = Cli::parse_from(normalize_shorthand(env::args_os()));
-    let _ = (cli.offline, cli.no_color);
+    let _ = cli.no_color;
 
     match cli.command {
         Command::Check { targets } => check(&targets, cli.json),
         Command::Status => status(cli.json),
+        Command::Update {
+            offline_dir,
+            no_edge,
+            base_url,
+            edge_url,
+        } => update_command(
+            cli.json,
+            cli.offline,
+            offline_dir,
+            no_edge,
+            base_url,
+            edge_url,
+        ),
         Command::Capabilities => capabilities(cli.json),
         Command::Schema { name } => schema(name),
     }
@@ -79,7 +111,14 @@ fn main() -> ExitCode {
 
 fn normalize_shorthand(args: impl IntoIterator<Item = OsString>) -> Vec<OsString> {
     let mut args: Vec<OsString> = args.into_iter().collect();
-    let commands = ["check", "status", "capabilities", "schema", "help"];
+    let commands = [
+        "check",
+        "status",
+        "update",
+        "capabilities",
+        "schema",
+        "help",
+    ];
 
     for index in 1..args.len() {
         let Some(value) = args[index].to_str() else {
@@ -102,92 +141,178 @@ fn normalize_shorthand(args: impl IntoIterator<Item = OsString>) -> Vec<OsString
 
 fn check(targets: &[String], json: bool) -> ExitCode {
     let started = Instant::now();
-    let mut parsed = Vec::with_capacity(targets.len());
-    for target in targets {
-        match target.parse::<IpAddr>() {
-            Ok(address) => parsed.push(address),
+    let parsed = match parse_targets(targets) {
+        Ok(parsed) => parsed,
+        Err(diagnostic) => {
+            let envelope = CommandEnvelope::<Vec<CheckResult>>::failure(
+                "check",
+                diagnostic,
+                elapsed_us(started),
+            );
+            render_failure(&envelope, json);
+            return ExitCode::from(2);
+        }
+    };
+
+    let home = kilo_home();
+    let snapshot = match verified_fresh_snapshot(&home) {
+        Ok(snapshot) => snapshot,
+        Err((diagnostic, exit_code)) => {
+            let envelope = CommandEnvelope::<Vec<CheckResult>>::failure(
+                "check",
+                diagnostic,
+                elapsed_us(started),
+            );
+            render_failure(&envelope, json);
+            return ExitCode::from(exit_code);
+        }
+    };
+
+    let mut results = Vec::with_capacity(parsed.len());
+    for address in parsed {
+        let matches = match snapshot.query(address) {
+            Ok(matches) => matches,
             Err(error) => {
-                let diagnostic = Diagnostic::new(
-                    "INVALID_TARGET",
-                    format!("{target:?} is not a valid IPv4 or IPv6 address: {error}"),
-                );
                 let envelope = CommandEnvelope::<Vec<CheckResult>>::failure(
                     "check",
-                    diagnostic,
-                    elapsed_us(started),
-                );
-                render_failure(&envelope, json);
-                return ExitCode::from(2);
-            }
-        }
-    }
-
-    let home = kilo_home();
-    let manifest_path = active_manifest_path(&home);
-    if !manifest_path.is_file() {
-        let diagnostic = Diagnostic::new(
-            "DATASET_MISSING",
-            format!(
-                "no active KiloCheck snapshot is installed at {}",
-                manifest_path.display()
-            ),
-        );
-        let envelope =
-            CommandEnvelope::<Vec<CheckResult>>::failure("check", diagnostic, elapsed_us(started));
-        render_failure(&envelope, json);
-        return ExitCode::from(1);
-    }
-
-    let index_path = home.join("active").join("snapshot.kilo");
-    if !index_path.is_file() {
-        let diagnostic = Diagnostic::new(
-            "SNAPSHOT_INDEX_MISSING",
-            format!(
-                "the active manifest exists, but its compiled index is missing at {}",
-                index_path.display()
-            ),
-        );
-        let envelope =
-            CommandEnvelope::<Vec<CheckResult>>::failure("check", diagnostic, elapsed_us(started));
-        render_failure(&envelope, json);
-        return ExitCode::from(1);
-    }
-
-    let diagnostic = Diagnostic::new(
-        "SNAPSHOT_FORMAT_UNSUPPORTED",
-        "the installed snapshot format is newer than this milestone can query",
-    );
-    let envelope =
-        CommandEnvelope::<Vec<CheckResult>>::failure("check", diagnostic, elapsed_us(started));
-    render_failure(&envelope, json);
-    let _ = parsed;
-    ExitCode::from(1)
-}
-
-fn status(json: bool) -> ExitCode {
-    let started = Instant::now();
-    let home = kilo_home();
-    let manifest_path = active_manifest_path(&home);
-
-    let snapshot = if manifest_path.is_file() {
-        match read_manifest(&manifest_path) {
-            Ok(manifest) => Some(SnapshotSummary {
-                id: manifest.snapshot_id,
-                created_at: manifest.created_at,
-                manifest_schema: manifest.schema,
-            }),
-            Err(error) => {
-                let envelope = CommandEnvelope::<DatasetStatus>::failure(
-                    "status",
-                    Diagnostic::new("MANIFEST_INVALID", error),
+                    Diagnostic::new("DATASET_INVALID", error.to_string()),
                     elapsed_us(started),
                 );
                 render_failure(&envelope, json);
                 return ExitCode::from(1);
             }
-        }
+        };
+        let observations = matches
+            .iter()
+            .map(|observation| Observation {
+                source_id: observation.source_id.clone(),
+                classification: observation.classification.clone(),
+                assertion: observation.assertion.clone(),
+                confidence: observation.confidence,
+                first_seen: observation.first_seen.clone(),
+                last_seen: observation.last_seen.clone(),
+                evidence_hash: observation.evidence_hash.clone(),
+                independence_group: independence_group(&observation.source_id).into(),
+            })
+            .collect::<Vec<_>>();
+        let provenance = matches
+            .iter()
+            .map(|observation| {
+                (
+                    observation.source_id.clone(),
+                    Provenance {
+                        source_id: observation.source_id.clone(),
+                        artifact_hash: observation.artifact_hash.clone(),
+                        license_id: observation.license_id.clone(),
+                    },
+                )
+            })
+            .collect::<BTreeMap<_, _>>()
+            .into_values()
+            .collect();
+        results.push(CheckResult {
+            schema: OBSERVATION_SCHEMA,
+            target: Target::from(address),
+            verdict: derive_verdict(&observations),
+            observations,
+            provenance,
+        });
+    }
+    let envelope = CommandEnvelope::success_with_snapshot(
+        "check",
+        snapshot.manifest.snapshot_id.clone(),
+        results,
+        elapsed_us(started),
+    );
+    if json {
+        render_json(&envelope);
     } else {
-        None
+        render_checks(&envelope);
+    }
+    ExitCode::SUCCESS
+}
+
+fn parse_targets(targets: &[String]) -> Result<Vec<IpAddr>, Diagnostic> {
+    targets
+        .iter()
+        .map(|target| {
+            target.parse::<IpAddr>().map_err(|error| {
+                Diagnostic::new(
+                    "INVALID_TARGET",
+                    format!("{target:?} is not a valid IPv4 or IPv6 address: {error}"),
+                )
+            })
+        })
+        .collect()
+}
+
+fn verified_fresh_snapshot(
+    home: &std::path::Path,
+) -> Result<kilo_dataset::Snapshot, (Diagnostic, u8)> {
+    let snapshot = open_active(home).map_err(|error| {
+        let code = if active_snapshot_dir(home).ok().flatten().is_none() {
+            "DATASET_MISSING"
+        } else {
+            "DATASET_INVALID"
+        };
+        (Diagnostic::new(code, error.to_string()), 1)
+    })?;
+    snapshot.manifest.ensure_fresh().map_err(|error| {
+        if matches!(&error, kilo_dataset::DatasetError::Stale(_)) {
+            (Diagnostic::new("DATASET_STALE", error.to_string()), 4)
+        } else {
+            (Diagnostic::new("DATASET_INVALID", error.to_string()), 1)
+        }
+    })?;
+    Ok(snapshot)
+}
+
+fn status(json: bool) -> ExitCode {
+    let started = Instant::now();
+    let home = kilo_home();
+    let mut freshness = "unavailable";
+    let snapshot = match active_snapshot_dir(&home) {
+        Ok(None) => None,
+        Ok(Some(_)) => match open_active(&home) {
+            Ok(snapshot) => {
+                freshness = match snapshot.manifest.ensure_fresh() {
+                    Ok(()) => "fresh",
+                    Err(kilo_dataset::DatasetError::Stale(_)) => "stale",
+                    Err(error) => {
+                        let envelope = CommandEnvelope::<DatasetStatus>::failure(
+                            "status",
+                            Diagnostic::new("DATASET_INVALID", error.to_string()),
+                            elapsed_us(started),
+                        );
+                        render_failure(&envelope, json);
+                        return ExitCode::from(1);
+                    }
+                };
+                Some(SnapshotSummary {
+                    id: snapshot.manifest.snapshot_id,
+                    created_at: snapshot.manifest.created_at,
+                    manifest_schema: snapshot.manifest.schema,
+                })
+            }
+            Err(error) => {
+                let envelope = CommandEnvelope::<DatasetStatus>::failure(
+                    "status",
+                    Diagnostic::new("DATASET_INVALID", error.to_string()),
+                    elapsed_us(started),
+                );
+                render_failure(&envelope, json);
+                return ExitCode::from(1);
+            }
+        },
+        Err(error) => {
+            let envelope = CommandEnvelope::<DatasetStatus>::failure(
+                "status",
+                Diagnostic::new("DATASET_INVALID", error.to_string()),
+                elapsed_us(started),
+            );
+            render_failure(&envelope, json);
+            return ExitCode::from(1);
+        }
     };
 
     let installed = snapshot.is_some();
@@ -195,14 +320,17 @@ fn status(json: bool) -> ExitCode {
         schema: STATUS_SCHEMA,
         installed,
         home: home.display().to_string(),
-        integrity: if installed {
-            "manifest-present"
-        } else {
-            "unavailable"
-        },
+        integrity: if installed { "verified" } else { "unavailable" },
+        freshness,
         snapshot,
     };
-    let envelope = CommandEnvelope::success("status", data, elapsed_us(started));
+    let snapshot_id = data.snapshot.as_ref().map(|snapshot| snapshot.id.clone());
+    let envelope = match snapshot_id {
+        Some(snapshot_id) => {
+            CommandEnvelope::success_with_snapshot("status", snapshot_id, data, elapsed_us(started))
+        }
+        None => CommandEnvelope::success("status", data, elapsed_us(started)),
+    };
 
     if json {
         render_json(&envelope);
@@ -224,8 +352,81 @@ fn status(json: bool) -> ExitCode {
                 .as_ref()
                 .map_or("unavailable", |value| value.integrity)
         );
+        println!("  Freshness   {freshness}");
     }
-    ExitCode::SUCCESS
+    ExitCode::from(if freshness == "stale" { 4 } else { 0 })
+}
+
+fn update_command(
+    json: bool,
+    offline: bool,
+    offline_dir: Option<PathBuf>,
+    no_edge: bool,
+    base_url: Option<String>,
+    edge_url: Option<String>,
+) -> ExitCode {
+    let started = Instant::now();
+    if offline && offline_dir.is_none() {
+        let envelope = CommandEnvelope::<kilo_dataset::UpdateReport>::failure(
+            "update",
+            Diagnostic::new(
+                "OFFLINE_INPUT_REQUIRED",
+                "--offline update requires --offline-dir with release archives and checksums",
+            ),
+            elapsed_us(started),
+        );
+        render_failure(&envelope, json);
+        return ExitCode::from(2);
+    }
+    let mut options = UpdateOptions {
+        offline_dir,
+        include_edge: !no_edge,
+        ..UpdateOptions::default()
+    };
+    if let Some(url) = base_url {
+        options.base_url = url;
+    }
+    if let Some(url) = edge_url {
+        options.edge_url = url;
+    }
+    let home = kilo_home();
+    match update(&home, &options) {
+        Ok(report) => {
+            let envelope = CommandEnvelope::success_with_snapshot(
+                "update",
+                report.snapshot_id.clone(),
+                report,
+                elapsed_us(started),
+            );
+            if json {
+                render_json(&envelope);
+            } else if let Some(report) = &envelope.data {
+                println!("KiloCheck dataset installed\n");
+                println!("  Snapshot    {}", report.snapshot_id);
+                println!("  Claims      {}", report.records);
+                println!("  Index       {} bytes", report.index_bytes);
+                println!("  Created     {}", report.installed_at);
+            }
+            ExitCode::SUCCESS
+        }
+        Err(error) => {
+            let stale = matches!(error, kilo_dataset::DatasetError::Stale(_));
+            let envelope = CommandEnvelope::<kilo_dataset::UpdateReport>::failure(
+                "update",
+                Diagnostic::new(
+                    if stale {
+                        "DATASET_STALE"
+                    } else {
+                        "UPDATE_FAILED"
+                    },
+                    error.to_string(),
+                ),
+                elapsed_us(started),
+            );
+            render_failure(&envelope, json);
+            ExitCode::from(if stale { 4 } else { 1 })
+        }
+    }
 }
 
 fn capabilities(json: bool) -> ExitCode {
@@ -259,17 +460,6 @@ fn schema(name: SchemaName) -> ExitCode {
     ExitCode::SUCCESS
 }
 
-fn read_manifest(path: &Path) -> Result<SnapshotManifest, String> {
-    let bytes =
-        fs::read(path).map_err(|error| format!("cannot read {}: {error}", path.display()))?;
-    SnapshotManifest::parse_json(&bytes)
-        .map_err(|error| format!("cannot parse {}: {error}", path.display()))
-}
-
-fn active_manifest_path(home: &Path) -> PathBuf {
-    home.join("active").join("manifest.json")
-}
-
 fn kilo_home() -> PathBuf {
     if let Some(path) = env::var_os("KILO_HOME") {
         return PathBuf::from(path);
@@ -299,6 +489,59 @@ fn render_failure<T: Serialize>(envelope: &CommandEnvelope<T>, json: bool) {
         for error in &envelope.errors {
             eprintln!("error[{}]: {}", error.code, error.message);
         }
+    }
+}
+
+fn render_checks(envelope: &CommandEnvelope<Vec<CheckResult>>) {
+    let Some(results) = &envelope.data else {
+        return;
+    };
+    for (index, result) in results.iter().enumerate() {
+        if index != 0 {
+            println!();
+        }
+        println!("KiloCheck — IP observation\n");
+        println!("Target");
+        println!("  IP                 {}", result.target.value);
+        println!("  Version            IPv{}", result.target.version);
+        println!(
+            "  Snapshot           {}",
+            envelope.snapshot_id.as_deref().unwrap_or("unknown")
+        );
+        println!("\nVerdict");
+        println!("  disposition        {:?}", result.verdict.disposition);
+        println!("  confidence         {:.2}", result.verdict.confidence);
+        println!(
+            "  recommended action {:?}",
+            result.verdict.recommended_action
+        );
+        println!(
+            "  reason             {}",
+            result.verdict.reason_codes.join(", ")
+        );
+        println!("\nObservations");
+        if result.observations.is_empty() {
+            println!("  none in the active snapshot");
+        } else {
+            for observation in &result.observations {
+                println!(
+                    "  {:<22} {:<32} {:.2}",
+                    observation.source_id, observation.classification, observation.confidence
+                );
+            }
+        }
+    }
+}
+
+fn independence_group(source: &str) -> &str {
+    if source.starts_with("spamhaus-") {
+        "spamhaus-drop"
+    } else if source.starts_with("feodo-") {
+        "abuse-ch-feodo"
+    } else if source == "tor-exits" {
+        "tor-project"
+    } else {
+        source
     }
 }
 

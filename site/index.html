@@ -29,7 +29,7 @@
       <nav aria-label="Primary navigation">
         <a href="#mechanism">Mechanism</a>
         <a href="#contract">Contract</a>
-        <a href="https://github.com/copyleftdev/kilocheck/releases/tag/v0.1.0">v0.1.0</a>
+        <a href="https://github.com/copyleftdev/kilocheck/releases/tag/v0.2.0">v0.2.0</a>
       </nav>
       <a class="repo-link" href="https://github.com/copyleftdev/kilocheck" aria-label="View KiloCheck on GitHub">
         <span>GitHub</span><span aria-hidden="true">↗</span>
@@ -43,7 +43,7 @@
           <h1 id="hero-title">Don't query a blacklist.<br><em>Observe the evidence.</em></h1>
           <p class="lede">KiloCheck compiles current threat observations into an auditable local snapshot, then checks IPs without asking the network for permission.</p>
           <div class="hero-actions">
-            <a class="button button-primary" href="https://github.com/copyleftdev/kilocheck/releases/tag/v0.1.0">Get the binary <span aria-hidden="true">↓</span></a>
+            <a class="button button-primary" href="https://github.com/copyleftdev/kilocheck/releases/tag/v0.2.0">Get the binary <span aria-hidden="true">↓</span></a>
             <a class="button button-quiet" href="#mechanism">Trace the mechanism</a>
           </div>
           <dl class="hero-proof" aria-label="Core guarantees">
@@ -71,7 +71,7 @@
         <header class="section-intro reveal">
           <p class="eyebrow">The local circuit</p>
           <h2 id="mechanism-title">Evidence goes in.<br>Proof comes out.</h2>
-          <p>The network is used to acquire signed, versioned data releases—not to judge a target. Every ordinary check runs against the same immutable local facts.</p>
+          <p>The network is used to acquire hashed, versioned data releases—not to judge a target. Every ordinary check runs against the same immutable local facts.</p>
         </header>
 
         <div class="machine reveal" data-machine-state="ingest">
@@ -112,7 +112,7 @@
           <p class="eyebrow">One command. No theater.</p>
           <h2 id="terminal-title">Ask locally.<br>Get evidence.</h2>
           <p>Missing, unknown, stale, incomplete, and unsafe are different states. KiloCheck refuses to flatten them into a vibes-based reputation score.</p>
-          <button class="copy-command" id="copy-command" type="button" data-copy="kilo check 198.51.100.42 --json">
+          <button class="copy-command" id="copy-command" type="button" data-copy="kilo check 162.243.103.246 --json">
             <span aria-hidden="true">$</span> Copy command
           </button>
         </div>
@@ -122,20 +122,22 @@
             <span>tty://kilocheck</span>
             <span>offline</span>
           </div>
-          <pre><code><span class="prompt">$</span> kilo check 198.51.100.42 --json
+          <pre><code><span class="prompt">$</span> kilo check 162.243.103.246 --json
 
 {
   <span class="key">"schema"</span>: <span class="string">"kilo.command.v1"</span>,
   <span class="key">"ok"</span>: <span class="bool">true</span>,
-  <span class="key">"snapshot_id"</span>: <span class="string">"sha256:8e7d…"</span>,
-  <span class="key">"data"</span>: {
-    <span class="key">"target"</span>: <span class="string">"198.51.100.42"</span>,
-    <span class="key">"verdict"</span>: <span class="string verdict">"observed"</span>,
-    <span class="key">"evidence_groups"</span>: <span class="number">3</span>
-  },
-  <span class="key">"network_requests"</span>: <span class="number">0</span>
+  <span class="key">"snapshot_id"</span>: <span class="string">"0f3fff…a781c2"</span>,
+  <span class="key">"data"</span>: [{
+    <span class="key">"target"</span>: { <span class="key">"type"</span>: <span class="string">"ip"</span>, <span class="key">"value"</span>: <span class="string">"162.243.103.246"</span> },
+    <span class="key">"verdict"</span>: {
+      <span class="key">"disposition"</span>: <span class="string verdict">"critical"</span>,
+      <span class="key">"recommended_action"</span>: <span class="string">"block"</span>
+    },
+    <span class="key">"observations"</span>: [{ <span class="key">"source_id"</span>: <span class="string">"feodo-c2"</span> }]
+  }]
 }</code></pre>
-          <p class="terminal-note">Illustrative future snapshot output. v0.1.0 establishes the CLI and contracts; snapshot queries are the next milestone.</p>
+          <p class="terminal-note">Observed from the v0.2.0 engine against the published Kilo Data release. Ordinary checks issue zero network syscalls.</p>
         </div>
       </section>
 
@@ -166,10 +168,10 @@
       <section class="release-callout reveal" aria-labelledby="release-title">
         <div>
           <p class="eyebrow">Transmission ready</p>
-          <h2 id="release-title">KiloCheck v0.1.0</h2>
+          <h2 id="release-title">KiloCheck v0.2.0</h2>
           <p>Signed provenance. Neighboring SHA-256 checksums. Linux, macOS, and Windows.</p>
         </div>
-        <a class="button button-primary" href="https://github.com/copyleftdev/kilocheck/releases/tag/v0.1.0">Inspect the release <span aria-hidden="true">↗</span></a>
+        <a class="button button-primary" href="https://github.com/copyleftdev/kilocheck/releases/tag/v0.2.0">Inspect the release <span aria-hidden="true">↗</span></a>
       </section>
     </main>
 

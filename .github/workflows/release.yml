@@ -92,6 +92,13 @@ jobs:
         run: |
           cd dist
           for checksum in *.sha256; do sha256sum --check "$checksum"; done
+      - name: Dogfood Linux installer and packaged binary
+        run: |
+          KILO_RELEASE_BASE="file://${PWD}/dist" \
+          KILO_INSTALL_DIR="${RUNNER_TEMP}/kilo-bin" \
+          scripts/install.sh
+          "${RUNNER_TEMP}/kilo-bin/kilo" --version
+          "${RUNNER_TEMP}/kilo-bin/kilo" capabilities --json
       - name: Attest build provenance
         uses: actions/attest-build-provenance@a2bbfa25375fe432b6a289bc6b6cd05ecd0c4c32
         with:

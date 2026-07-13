@@ -28,22 +28,29 @@ ch3ck5 by hum4n5, 4g3n75, 4nd 3nf0rc3m3n7 5y573m5.
 - V3rd1c75 d3r1v3 fr0m 7yp3d 0b53rv4710n5 4nd 1nd3p3nd3n7 3v1d3nc3
   gr0up5—n07 4 mu74bl3 r3pu74710n 5c0r3.
 
-## CURR3N7 M1L3570N3
+## D0GF00D W0RKFL0W
 
-7h15 r3p05170ry 3574bl15h35 7h3 3x3cu74bl3 4nd 175 publ1c c0n7r4c75:
+1n574ll 7h3 r3l3453 b1n4ry, pu7 `kilo` 0n `PATH`, 4nd run:
 
 ```bash
-kilo capabilities --json
+kilo update
 kilo status --json
-kilo check 192.0.2.1 --json
-kilo 192.0.2.1 --json
-kilo schema command
+kilo check 162.243.103.246 --json
 ```
 
-7h3 curr3n7 `check` c0mm4nd v4l1d4735 74rg375 4nd f41l5 3xpl1c17ly wh3n n0
-c0mp1l3d 5n4p5h07 15 1n574ll3d. 17 d035 n07 pr373nd 7h47 4n un0b53rv3d
-4ddr355 15 54f3. 7h3 n3x7 m1l3570n3 4dd5 v3r1f13d K1l0 D474 r3l3453
-1n574ll4710n 4nd 7h3 1mmu74bl3 m3m0ry-m4pp3d l00kup 1nd3x.
+`kilo update` pull5 7h3 574bl3 b453 4nd r0ll1ng 3dg3 r3l3453 455375 d1r3c7ly.
+N0 G17Hub API. N0 r3pu74710n API. 17 v3r1f135 7h3 n31ghb0r1ng SHA-256,
+m4n1f3575, 74bl3 h45h35, 4rch1v3 54f37y, 4nd fr35hn355 b3f0r3 470m1c
+4c71v4710n. `kilo check` 7h3n r34d5 0nly 7h3 c0mp4c7 l0c4l 1nd3x.
+
+4n un0b53rv3d 4ddr355 15 `unknown`, n3v3r cl34n. 4 574l3 5n4p5h07 15
+v151bl3 1n `status`, bu7 `check` r3fu535 70 4n5w3r.
+
+41r-g4pp3d upd473:
+
+```bash
+kilo --offline update --offline-dir ./kilo-data-release
+```
 
 ## 1N574LL 4 R3L3453
 
@@ -53,8 +60,21 @@ Pr3bu1l7 4rch1v35 f0r L1nux x86-64, m4cOS 1n73l, m4cOS 4ppl3 51l1c0n,
 4rch1v3 h45 4 n31ghb0r1ng SHA-256 f1l3 4nd G17Hub bu1ld-pr0v3n4nc3
 4773574710n.
 
+L1nux / m4cOS qu1ck 1n574ll (v3r510n-p1nn3d, SHA-256 v3r1f13d, n0 API):
+
 ```bash
-sha256sum --check kilo-v0.1.0-x86_64-unknown-linux-musl.tar.gz.sha256
+curl -fsSL https://raw.githubusercontent.com/copyleftdev/kilocheck/v0.2.0/scripts/install.sh | sh
+kilo update
+```
+
+R3v13w 7h3 5cr1p7 47 7h3 74g b3f0r3 p1p1ng 17 70 4 5h3ll. M4nu4l
+1n574ll:
+
+```bash
+sha256sum --check kilo-v0.2.0-x86_64-unknown-linux-musl.tar.gz.sha256
+tar -xzf kilo-v0.2.0-x86_64-unknown-linux-musl.tar.gz
+install -m 0755 kilo-v0.2.0-x86_64-unknown-linux-musl/kilo ~/.local/bin/kilo
+kilo update
 ```
 
 ## BU1LD
@@ -68,7 +88,8 @@ cargo run -p kilo-cli -- capabilities --json
 ## 7357 C0N7R4C7
 
 F457 un17 4nd pr0p3r7y 73575 run 0n L1nux, m4cOS, 4nd W1nd0w5. L1nux CI
-4l50 run5 mu74710n 4n4ly515 0v3r `kilo-core` 4nd 5m0k3-fuzz35 3v3ry
+4l50 run5 mu74710n 4n4ly515 0v3r `kilo-core` 4nd 7h3 c0mp4c7 1nd3x,
+7h3n 5m0k3-fuzz35 3v3ry
 un7ru573d-1npu7 p4r53r.
 
 ```bash
@@ -77,11 +98,11 @@ scripts/mutate.sh
 KILO_FUZZ_RUNS=10000 scripts/fuzz-smoke.sh
 ```
 
-7h3 1n1714l pr0p3r7135 c0v3r 7h3 c0mpl373 IPv4 4nd IPv6 5p4c35,
-c4n0n1c4l r0und 7r1p5, 4rb17r4ry 74rg37 73x7, d373rm1n1571c m4n1f357
-53r14l1z4710n, 4nd 7h3 1nv4r14n7 7h47 dupl1c473 up57r34m 3v1d3nc3 n3v3r
-1ncr34535 1nd3p3nd3nc3. 533 [CONTRIBUTING.md](CONTRIBUTING.md) f0r 7h3
-73571ng p0l1cy.
+7h3 pr0p3r7135 c0v3r IPv4, IPv6, 128-b17 pr3f1x m3mb3r5h1p, 4rb17r4ry
+74rg37 4nd 1nd3x by735, d373rm1n1571c c0mp1l4710n, 4nd dupl1c473-3v1d3nc3
+1nd3p3nd3nc3. 4dv3r54r14l 73575 h17 4rch1v3 7r4v3r54l, l1nk5, ch3ck5um
+74mp3r1ng, 1nd3x 74mp3r1ng, 3dg3 r3pl4c3m3n7, l457-g00d pr353rv4710n, 4nd
+fr35hn355 b0und4r135. 533 [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## 3X17 C0D35
 
@@ -90,6 +111,7 @@ c4n0n1c4l r0und 7r1p5, 4rb17r4ry 74rg37 73x7, d373rm1n1571c m4n1f357
 | `0` | C0mm4nd 5ucc33d3d; n0 p0l1cy v10l4710n |
 | `1` | 0p3r4710n4l 0r 1n73gr17y 3rr0r |
 | `2` | 1nv4l1d 1nv0c4710n |
+| `4` | D474537 700 574l3 |
 
 ## 4RCH173C7UR3
 

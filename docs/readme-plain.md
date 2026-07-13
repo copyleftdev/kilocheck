@@ -26,22 +26,33 @@ only the bounded evidence the engine established.
 - Verdicts derive from typed observations and independent evidence groups—not
   a mutable reputation score.
 
-## Current milestone
+## Dogfood workflow
 
-This repository establishes the executable and its public contracts:
+Install the release archive for your platform, place `kilo` on `PATH`, then:
 
 ```bash
-kilo capabilities --json
+kilo update
 kilo status --json
-kilo check 192.0.2.1 --json
-kilo 192.0.2.1 --json
-kilo schema command
+kilo check 162.243.103.246 --json
 ```
 
-The current `check` command validates targets and fails explicitly when no
-compiled snapshot is installed. It does not pretend that an unobserved address
-is safe. The next milestone adds verified Kilo Data release installation and
-the immutable memory-mapped lookup index.
+`kilo update` downloads the stable base and rolling edge assets directly from
+the Kilo Data GitHub releases. It does not use the GitHub API or a reputation
+API. It verifies each neighboring SHA-256 file, rejects unsafe archives,
+validates manifests and table hashes, enforces freshness, compiles a compact
+local index, and activates it only after every step succeeds.
+
+`kilo check` reads only that local index. An unobserved address is `unknown`,
+never clean. A snapshot with a current edge overlay expires after six hours; a
+base-only snapshot expires after 72 hours. Stale data remains inspectable with
+`status`, but `check` refuses to produce a verdict.
+
+For an air-gapped update, place both release archives and their `.sha256` files
+in one directory:
+
+```bash
+kilo --offline update --offline-dir ./kilo-data-release
+```
 
 ## Install a release
 
@@ -50,8 +61,20 @@ Windows x86-64 are published on the
 [releases page](https://github.com/copyleftdev/kilocheck/releases). Every
 archive has a neighboring SHA-256 file and GitHub build-provenance attestation.
 
+Linux and macOS quick install (version-pinned, SHA-256 verified, no API):
+
 ```bash
-sha256sum --check kilo-v0.1.0-x86_64-unknown-linux-musl.tar.gz.sha256
+curl -fsSL https://raw.githubusercontent.com/copyleftdev/kilocheck/v0.2.0/scripts/install.sh | sh
+kilo update
+```
+
+Review the script at the tag before piping it to a shell. Manual Linux install:
+
+```bash
+sha256sum --check kilo-v0.2.0-x86_64-unknown-linux-musl.tar.gz.sha256
+tar -xzf kilo-v0.2.0-x86_64-unknown-linux-musl.tar.gz
+install -m 0755 kilo-v0.2.0-x86_64-unknown-linux-musl/kilo ~/.local/bin/kilo
+kilo update
 ```
 
 ## Build
@@ -65,8 +88,8 @@ cargo run -p kilo-cli -- capabilities --json
 ## Test contract
 
 Fast unit and property tests run on Linux, macOS, and Windows. Linux CI also
-runs mutation analysis over `kilo-core` and smoke-fuzzes every untrusted-input
-parser.
+runs mutation analysis over `kilo-core` and the compact index engine, then
+smoke-fuzzes every untrusted-input parser.
 
 ```bash
 scripts/test-all.sh
@@ -74,9 +97,12 @@ scripts/mutate.sh
 KILO_FUZZ_RUNS=10000 scripts/fuzz-smoke.sh
 ```
 
-The initial properties cover the complete IPv4 and IPv6 spaces, canonical
-round trips, arbitrary target text, deterministic manifest serialization, and
-the invariant that duplicate upstream evidence never increases independence.
+The properties cover the complete IPv4 and IPv6 spaces, arbitrary 128-bit
+prefix membership, arbitrary target and index bytes, canonical round trips,
+deterministic compilation, and the invariant that duplicate upstream evidence
+never increases independence. Archive traversal, links, checksum tampering,
+index tampering, edge replacement, last-good preservation, and freshness
+boundaries have explicit adversarial tests.
 See [CONTRIBUTING.md](../CONTRIBUTING.md) for the testing policy.
 
 ## Exit codes currently emitted
@@ -86,6 +112,7 @@ See [CONTRIBUTING.md](../CONTRIBUTING.md) for the testing policy.
 | `0` | Command succeeded; no policy violation |
 | `1` | Operational or integrity error |
 | `2` | Invalid invocation |
+| `4` | Dataset too stale |
 
 ## Architecture
 

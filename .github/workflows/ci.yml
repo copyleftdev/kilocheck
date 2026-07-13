@@ -24,6 +24,8 @@ jobs:
         run: rustup show
       - name: Format
         run: cargo fmt --all --check
+      - name: Validate installer syntax
+        run: sh -n scripts/install.sh
       - name: Check
         run: cargo check --workspace --locked
       - name: Clippy

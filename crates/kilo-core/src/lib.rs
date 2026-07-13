@@ -42,6 +42,18 @@ impl<T> CommandEnvelope<T> {
     }
 
     #[must_use]
+    pub fn success_with_snapshot(
+        command: &'static str,
+        snapshot_id: impl Into<String>,
+        data: T,
+        elapsed_us: u64,
+    ) -> Self {
+        let mut envelope = Self::success(command, data, elapsed_us);
+        envelope.snapshot_id = Some(snapshot_id.into());
+        envelope
+    }
+
+    #[must_use]
     pub fn failure(command: &'static str, error: Diagnostic, elapsed_us: u64) -> Self {
         Self {
             schema: COMMAND_SCHEMA,
@@ -167,6 +179,54 @@ pub fn independent_group_count(observations: &[Observation]) -> usize {
         .len()
 }
 
+/// Derive a deterministic bounded verdict from typed observations.
+#[must_use]
+pub fn derive_verdict(observations: &[Observation]) -> Verdict {
+    if observations.is_empty() {
+        return Verdict {
+            disposition: Disposition::Unknown,
+            confidence: 0.0,
+            recommended_action: RecommendedAction::Monitor,
+            reason_codes: vec!["NOT_OBSERVED".into()],
+        };
+    }
+
+    let mut severity = 0_u8;
+    let mut confidence = 0.0_f32;
+    let mut reasons = BTreeSet::new();
+    for observation in observations {
+        confidence = confidence.max(observation.confidence);
+        let (candidate, reason) = match observation.classification.as_str() {
+            "command-and-control" => (5, "COMMAND_AND_CONTROL"),
+            "dedicated-malicious-netblock" | "dedicated-malicious-network" => {
+                (4, "DEDICATED_MALICIOUS_NETWORK")
+            }
+            "tor-exit" => (2, "ANONYMITY_INFRASTRUCTURE"),
+            _ => (3, "THREAT_OBSERVATION"),
+        };
+        severity = severity.max(candidate);
+        reasons.insert(reason.to_owned());
+    }
+    let groups = independent_group_count(observations);
+    if groups > 1 {
+        reasons.insert("MULTISOURCE_CORROBORATION".into());
+        let corroborating_groups = u8::try_from(groups.saturating_sub(1).min(49)).unwrap_or(49);
+        confidence = (confidence + 0.02 * f32::from(corroborating_groups)).min(0.99);
+    }
+    let (disposition, recommended_action) = match severity {
+        5 => (Disposition::Critical, RecommendedAction::Block),
+        4 => (Disposition::Dangerous, RecommendedAction::Block),
+        3 => (Disposition::Suspicious, RecommendedAction::Challenge),
+        _ => (Disposition::Observed, RecommendedAction::Monitor),
+    };
+    Verdict {
+        disposition,
+        confidence,
+        recommended_action,
+        reason_codes: reasons.into_iter().collect(),
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct Provenance {
     pub source_id: String,
@@ -226,8 +286,8 @@ impl Default for Capabilities {
                 },
                 CommandCapability {
                     name: "update",
-                    available: false,
-                    summary: "Planned: verify, compile, and atomically install Kilo Data releases",
+                    available: true,
+                    summary: "Verify, compile, and atomically install Kilo Data releases",
                 },
             ],
             output_schemas: vec![COMMAND_SCHEMA, OBSERVATION_SCHEMA, STATUS_SCHEMA],
@@ -245,16 +305,8 @@ impl Default for Capabilities {
                     meaning: "invalid invocation",
                 },
                 ExitCodeCapability {
-                    code: 3,
-                    meaning: "policy gate failed",
-                },
-                ExitCodeCapability {
                     code: 4,
-                    meaning: "dataset too stale",
-                },
-                ExitCodeCapability {
-                    code: 5,
-                    meaning: "required-source result is incomplete",
+                    meaning: "dataset is too stale",
                 },
             ],
         }
@@ -267,6 +319,7 @@ pub struct DatasetStatus {
     pub installed: bool,
     pub home: String,
     pub integrity: &'static str,
+    pub freshness: &'static str,
     pub snapshot: Option<SnapshotSummary>,
 }
 
@@ -343,6 +396,19 @@ mod tests {
 
     use super::*;
 
+    fn observation(classification: &str, group: &str, confidence: f32) -> Observation {
+        Observation {
+            source_id: format!("source-{group}"),
+            classification: classification.into(),
+            assertion: "directly-observed".into(),
+            confidence,
+            first_seen: None,
+            last_seen: None,
+            evidence_hash: "00".repeat(32),
+            independence_group: group.into(),
+        }
+    }
+
     #[test]
     fn target_canonicalizes_ip_addresses() {
         let target = Target::from("2001:0db8::1".parse::<IpAddr>().expect("valid fixture"));
@@ -399,5 +465,78 @@ mod tests {
             "snapshot manifest field \"snapshot_id\" is empty"
         );
         assert!(field_error.source().is_none());
+    }
+
+    #[test]
+    fn empty_evidence_is_unknown_and_never_clean() {
+        let verdict = derive_verdict(&[]);
+        assert_eq!(verdict.disposition, Disposition::Unknown);
+        assert_eq!(verdict.recommended_action, RecommendedAction::Monitor);
+        assert_eq!(verdict.reason_codes, ["NOT_OBSERVED"]);
+    }
+
+    #[test]
+    fn c2_evidence_is_critical_and_blocked() {
+        let verdict = derive_verdict(&[observation("command-and-control", "abuse-ch-feodo", 0.99)]);
+        assert_eq!(verdict.disposition, Disposition::Critical);
+        assert_eq!(verdict.recommended_action, RecommendedAction::Block);
+    }
+
+    #[test]
+    fn classification_policy_covers_every_severity_branch() {
+        for (classification, disposition, action, reason) in [
+            (
+                "dedicated-malicious-netblock",
+                Disposition::Dangerous,
+                RecommendedAction::Block,
+                "DEDICATED_MALICIOUS_NETWORK",
+            ),
+            (
+                "tor-exit",
+                Disposition::Observed,
+                RecommendedAction::Monitor,
+                "ANONYMITY_INFRASTRUCTURE",
+            ),
+            (
+                "scanner",
+                Disposition::Suspicious,
+                RecommendedAction::Challenge,
+                "THREAT_OBSERVATION",
+            ),
+        ] {
+            let verdict = derive_verdict(&[observation(classification, "one", 0.7)]);
+            assert_eq!(verdict.disposition, disposition);
+            assert_eq!(verdict.recommended_action, action);
+            assert_eq!(verdict.reason_codes, [reason]);
+        }
+    }
+
+    #[test]
+    fn confidence_bonus_requires_and_counts_distinct_groups() {
+        let one = derive_verdict(&[observation("scanner", "one", 0.5)]);
+        assert!((one.confidence - 0.5).abs() < f32::EPSILON);
+        assert!(
+            !one.reason_codes
+                .iter()
+                .any(|code| code == "MULTISOURCE_CORROBORATION")
+        );
+
+        let two = derive_verdict(&[
+            observation("scanner", "one", 0.5),
+            observation("scanner", "two", 0.5),
+        ]);
+        assert!((two.confidence - 0.52).abs() < f32::EPSILON);
+        assert!(
+            two.reason_codes
+                .iter()
+                .any(|code| code == "MULTISOURCE_CORROBORATION")
+        );
+
+        let three = derive_verdict(&[
+            observation("scanner", "one", 0.5),
+            observation("scanner", "two", 0.5),
+            observation("scanner", "three", 0.5),
+        ]);
+        assert!((three.confidence - 0.54).abs() < f32::EPSILON);
     }
 }

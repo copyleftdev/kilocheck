@@ -1,4 +1,7 @@
-examine_globs = ["crates/kilo-core/src/**/*.rs"]
+examine_globs = [
+  "crates/kilo-core/src/**/*.rs",
+  "crates/kilo-dataset/src/index.rs",
+]
 test_workspace = true
 timeout_multiplier = 3.0
 minimum_test_timeout = 20.0
