@@ -227,7 +227,8 @@ fn validate_layout(bytes: &[u8]) -> Result<(usize, usize, usize)> {
             })?)
             .ok_or_else(|| DatasetError::Invalid("compiled index layout overflows".into()))?;
     if strings_offset != expected_offset
-        || strings_len != bytes.len().saturating_sub(strings_offset)
+        || strings_offset > bytes.len()
+        || strings_len != bytes.len() - strings_offset
     {
         return Err(DatasetError::Invalid(
             "compiled index layout is inconsistent".into(),
@@ -471,6 +472,15 @@ mod tests {
         let mut wrong_string_length = valid;
         write_u64(&mut wrong_string_length, 32, 1);
         assert!(validate_layout(&wrong_string_length).is_err());
+
+        let mut record_area_past_end = valid_empty_index();
+        write_u64(&mut record_area_past_end, 16, 1);
+        write_u64(
+            &mut record_area_past_end,
+            24,
+            (HEADER_SIZE + RECORD_SIZE) as u64,
+        );
+        assert!(validate_layout(&record_area_past_end).is_err());
     }
 
     #[test]

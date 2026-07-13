@@ -250,10 +250,9 @@ fn verified_fresh_snapshot(
     home: &std::path::Path,
 ) -> Result<kilo_dataset::Snapshot, (Diagnostic, u8)> {
     let snapshot = open_active(home).map_err(|error| {
-        let code = if active_snapshot_dir(home).ok().flatten().is_none() {
-            "DATASET_MISSING"
-        } else {
-            "DATASET_INVALID"
+        let code = match active_snapshot_dir(home) {
+            Ok(None) => "DATASET_MISSING",
+            Ok(Some(_)) | Err(_) => "DATASET_INVALID",
         };
         (Diagnostic::new(code, error.to_string()), 1)
     })?;
@@ -579,5 +578,16 @@ mod tests {
         ];
         let normalized = normalize_shorthand(args);
         assert_eq!(normalized[2], "check");
+    }
+
+    #[test]
+    fn malformed_active_pointer_is_invalid_not_missing() {
+        let home = tempfile::tempdir().unwrap();
+        std::fs::write(home.path().join("active.json"), b"not json").unwrap();
+        let Err((diagnostic, exit_code)) = verified_fresh_snapshot(home.path()) else {
+            panic!("malformed active pointer must fail");
+        };
+        assert_eq!(diagnostic.code, "DATASET_INVALID");
+        assert_eq!(exit_code, 1);
     }
 }

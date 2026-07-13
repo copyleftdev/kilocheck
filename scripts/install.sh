@@ -37,7 +37,7 @@ download() {
       if command -v curl >/dev/null 2>&1; then
         curl --fail --location --silent --show-error "${source}" --output "${destination}"
       elif command -v wget >/dev/null 2>&1; then
-        wget --quiet "${source}" --output-document="${destination}"
+        wget --no-verbose "${source}" --output-document="${destination}"
       else
         echo "kilo: curl or wget is required" >&2
         exit 1

@@ -171,12 +171,12 @@ fn read_indicators(
             let id = required(ids, row, "indicator_id")?;
             if wanted.contains(id) {
                 let value = required(values, row, "canonical_value")?;
-                if let Some(existing) = output.insert(id.to_owned(), value.to_owned())
-                    && existing != value
-                {
-                    return Err(DatasetError::Invalid(format!(
-                        "indicator_id {id:?} maps to conflicting values {existing:?} and {value:?}"
-                    )));
+                if let Some(existing) = output.insert(id.to_owned(), value.to_owned()) {
+                    if existing != value {
+                        return Err(DatasetError::Invalid(format!(
+                            "indicator_id {id:?} maps to conflicting values {existing:?} and {value:?}"
+                        )));
+                    }
                 }
             }
         }

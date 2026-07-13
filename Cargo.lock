@@ -831,6 +831,7 @@ dependencies = [
  "kilo-dataset",
  "serde",
  "serde_json",
+ "tempfile",
 ]
 
 [[package]]
