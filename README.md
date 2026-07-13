@@ -6,6 +6,8 @@
 
 > D0N'7 QU3RY 4 BL4CKL157. 0B53RV3 7H3 3V1D3NC3.
 
+> Accessibility: [read the canonical plain-language contract](docs/readme-plain.md).
+
 K1l0Ch3ck 15 4 l0c4l-f1r57, d373rm1n1571c IP-1n73ll1g3nc3 CLI. 17 c0mp1l35
 curr3n7 7hr347 0b53rv4710n5 1n70 4n 4ud174bl3 l0c4l 5n4p5h07 f0r f457
 ch3ck5 by hum4n5, 4g3n75, 4nd 3nf0rc3m3n7 5y573m5.
@@ -88,9 +90,6 @@ c4n0n1c4l r0und 7r1p5, 4rb17r4ry 74rg37 73x7, d373rm1n1571c m4n1f357
 | `0` | C0mm4nd 5ucc33d3d; n0 p0l1cy v10l4710n |
 | `1` | 0p3r4710n4l 0r 1n73gr17y 3rr0r |
 | `2` | 1nv4l1d 1nv0c4710n |
-| `3` | P0l1cy g473 f41l3d |
-| `4` | D474537 700 574l3 |
-| `5` | R3qu1r3d-50urc3 r35ul7 15 1nc0mpl373 |
 
 ## 4RCH173C7UR3
 
