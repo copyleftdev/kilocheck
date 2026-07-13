@@ -4,7 +4,7 @@
   const PHASES = Object.freeze([
     Object.freeze({ id: "ingest", code: "01 / INGEST", title: "Acquire the artifact", detail: "Pull a versioned Kilo Data release with its manifest and published hash." }),
     Object.freeze({ id: "normalize", code: "02 / NORMALIZE", title: "Make evidence typed", detail: "Resolve source shapes into explicit observations without erasing provenance." }),
-    Object.freeze({ id: "compile", code: "03 / COMPILE", title: "Freeze the snapshot", detail: "Build one immutable index designed for deterministic, memory-mapped lookup." }),
+    Object.freeze({ id: "compile", code: "03 / COMPILE", title: "Freeze the snapshot", detail: "Build one compact immutable index for deterministic local lookup." }),
     Object.freeze({ id: "check", code: "04 / CHECK", title: "Observe without calling out", detail: "Query bounded local evidence. Return stable JSON and a distinct operational state." })
   ]);
 

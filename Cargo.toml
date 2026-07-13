@@ -1,9 +1,9 @@
 [workspace]
-members = ["crates/kilo-cli", "crates/kilo-core"]
+members = ["crates/kilo-cli", "crates/kilo-core", "crates/kilo-dataset"]
 resolver = "2"
 
 [workspace.package]
-version = "0.1.0"
+version = "0.2.0"
 edition = "2024"
 rust-version = "1.85"
 license = "Apache-2.0"
@@ -11,8 +11,17 @@ repository = "https://github.com/copyleftdev/kilocheck"
 
 [workspace.dependencies]
 clap = { version = "4.6.1", features = ["derive"] }
+arrow = "59.1.0"
+chrono = { version = "0.4.45", default-features = false, features = ["clock", "std"] }
+flate2 = "1.1.9"
+hex = "0.4.3"
+parquet = { version = "59.1.0", features = ["arrow"] }
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.149"
+sha2 = "0.11.0"
+tar = "0.4.46"
+tempfile = "3.27.0"
+ureq = "3.3.0"
 proptest = "1.11.0"
 
 [workspace.lints.rust]

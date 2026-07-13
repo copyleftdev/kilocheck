@@ -47,7 +47,10 @@ test("motion and paint stay composited and bounded", () => {
   assert.doesNotMatch(css, /border-(?:left|right):\s*[2-9]/);
 });
 
-test("site makes the current milestone limitation explicit", () => {
-  assert.ok(html.includes("Illustrative future snapshot output"));
-  assert.ok(html.includes("snapshot queries are the next milestone"));
+test("site shows the dogfoodable release and actual output shape", () => {
+  assert.ok(html.includes("KiloCheck v0.2.0"));
+  assert.ok(html.includes("Observed from the v0.2.0 engine"));
+  assert.ok(html.includes('"observations"'));
+  assert.ok(html.includes("zero network syscalls"));
+  assert.ok(!html.includes("Illustrative future snapshot output"));
 });

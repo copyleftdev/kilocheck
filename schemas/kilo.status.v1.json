@@ -3,12 +3,13 @@
   "$id": "https://kilocheck.dev/schemas/kilo.status.v1.json",
   "title": "KiloCheck local dataset status",
   "type": "object",
-  "required": ["schema", "installed", "home", "integrity", "snapshot"],
+  "required": ["schema", "installed", "home", "integrity", "freshness", "snapshot"],
   "properties": {
     "schema": { "const": "kilo.status.v1" },
     "installed": { "type": "boolean" },
     "home": { "type": "string", "minLength": 1 },
     "integrity": { "enum": ["unavailable", "manifest-present", "verified", "invalid"] },
+    "freshness": { "enum": ["unavailable", "fresh", "stale"] },
     "snapshot": {
       "oneOf": [
         { "type": "null" },

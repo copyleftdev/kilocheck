@@ -1,0 +1,27 @@
+[package]
+name = "kilo-dataset"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Verified Kilo Data installation and deterministic local lookup engine"
+
+[dependencies]
+arrow.workspace = true
+chrono.workspace = true
+flate2.workspace = true
+hex.workspace = true
+parquet.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+tar.workspace = true
+tempfile.workspace = true
+ureq.workspace = true
+
+[dev-dependencies]
+proptest.workspace = true
+
+[lints]
+workspace = true
