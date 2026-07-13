@@ -1,0 +1,78 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://kilocheck.dev/schemas/kilo.observation.v1.json",
+  "title": "KiloCheck IP observation result",
+  "type": "object",
+  "required": ["schema", "target", "verdict", "observations", "provenance"],
+  "properties": {
+    "schema": { "const": "kilo.observation.v1" },
+    "target": {
+      "type": "object",
+      "required": ["type", "value", "version"],
+      "properties": {
+        "type": { "const": "ip" },
+        "value": { "type": "string", "format": "ip-address" },
+        "version": { "enum": [4, 6] }
+      },
+      "additionalProperties": false
+    },
+    "verdict": {
+      "type": "object",
+      "required": ["disposition", "confidence", "recommended_action", "reason_codes"],
+      "properties": {
+        "disposition": {
+          "enum": ["clean", "unknown", "observed", "suspicious", "dangerous", "critical"]
+        },
+        "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
+        "recommended_action": {
+          "enum": ["allow", "log", "monitor", "challenge", "rate-limit", "block", "escalate"]
+        },
+        "reason_codes": {
+          "type": "array",
+          "items": { "type": "string", "pattern": "^[A-Z][A-Z0-9_]+$" },
+          "uniqueItems": true
+        }
+      },
+      "additionalProperties": false
+    },
+    "observations": { "type": "array", "items": { "$ref": "#/$defs/observation" } },
+    "provenance": { "type": "array", "items": { "$ref": "#/$defs/provenance" } }
+  },
+  "$defs": {
+    "observation": {
+      "type": "object",
+      "required": [
+        "source_id",
+        "classification",
+        "assertion",
+        "confidence",
+        "first_seen",
+        "last_seen",
+        "evidence_hash",
+        "independence_group"
+      ],
+      "properties": {
+        "source_id": { "type": "string", "minLength": 1 },
+        "classification": { "type": "string", "minLength": 1 },
+        "assertion": { "type": "string", "minLength": 1 },
+        "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
+        "first_seen": { "type": ["string", "null"], "format": "date-time" },
+        "last_seen": { "type": ["string", "null"], "format": "date-time" },
+        "evidence_hash": { "type": "string", "minLength": 1 },
+        "independence_group": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": false
+    },
+    "provenance": {
+      "type": "object",
+      "required": ["source_id", "artifact_hash", "license_id"],
+      "properties": {
+        "source_id": { "type": "string", "minLength": 1 },
+        "artifact_hash": { "type": "string", "minLength": 1 },
+        "license_id": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

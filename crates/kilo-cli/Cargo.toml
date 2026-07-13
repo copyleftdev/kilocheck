@@ -1,0 +1,23 @@
+[package]
+name = "kilo-cli"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Local-first deterministic IP intelligence CLI"
+keywords = ["cybersecurity", "threat-intelligence", "ip-reputation", "phishing", "cli"]
+categories = ["command-line-utilities"]
+
+[[bin]]
+name = "kilo"
+path = "src/main.rs"
+
+[dependencies]
+clap.workspace = true
+kilo-core = { path = "../kilo-core" }
+serde.workspace = true
+serde_json.workspace = true
+
+[lints]
+workspace = true

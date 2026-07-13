@@ -1,0 +1,53 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://kilocheck.dev/schemas/kilo.command.v1.json",
+  "title": "KiloCheck command envelope",
+  "type": "object",
+  "required": [
+    "schema",
+    "command",
+    "ok",
+    "partial",
+    "snapshot_id",
+    "data",
+    "warnings",
+    "errors",
+    "metrics"
+  ],
+  "properties": {
+    "schema": { "const": "kilo.command.v1" },
+    "command": { "type": "string", "minLength": 1 },
+    "ok": { "type": "boolean" },
+    "partial": { "type": "boolean" },
+    "snapshot_id": { "type": ["string", "null"] },
+    "data": {},
+    "warnings": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/diagnostic" }
+    },
+    "errors": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/diagnostic" }
+    },
+    "metrics": {
+      "type": "object",
+      "required": ["elapsed_us"],
+      "properties": {
+        "elapsed_us": { "type": "integer", "minimum": 0 }
+      },
+      "additionalProperties": false
+    }
+  },
+  "$defs": {
+    "diagnostic": {
+      "type": "object",
+      "required": ["code", "message"],
+      "properties": {
+        "code": { "type": "string", "pattern": "^[A-Z][A-Z0-9_]+$" },
+        "message": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}
