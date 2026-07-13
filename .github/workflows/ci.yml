@@ -9,6 +9,13 @@ permissions:
   contents: read
 
 jobs:
+  site:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - name: Validate GitHub Pages site
+        run: scripts/test-site.sh
+
   test:
     runs-on: ubuntu-latest
     steps:

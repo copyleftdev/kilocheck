@@ -6,6 +6,8 @@ KiloCheck is a local-first, deterministic IP-intelligence CLI. It is designed
 to compile current threat observations into an auditable local snapshot for
 fast checks by humans, agents, and enforcement systems.
 
+Explore the mechanism at **[copyleftdev.github.io/kilocheck](https://copyleftdev.github.io/kilocheck/)**.
+
 The intelligence engine proves. An optional AI layer may eventually interpret
 only the bounded evidence the engine established.
 
