@@ -23,3 +23,57 @@ jobs:
         run: cargo clippy --workspace --all-targets --locked -- -D warnings
       - name: Test
         run: cargo test --workspace --locked
+
+  cross-platform:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - name: Test
+        run: cargo test --workspace --locked
+
+  cross-platform-gate:
+    if: always()
+    needs: cross-platform
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require every platform
+        if: needs.cross-platform.result != 'success'
+        run: exit 1
+
+  mutation:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - name: Install cargo-mutants
+        run: cargo install cargo-mutants --version 27.0.0 --locked
+      - name: Mutation analysis
+        run: cargo mutants --workspace --output .
+      - name: Upload mutation report
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: mutation-report
+          path: mutants.out
+
+  fuzz:
+    needs: test
+    runs-on: ubuntu-latest
+    env:
+      ASAN_OPTIONS: detect_leaks=0
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - name: Install fuzz toolchain
+        run: |
+          rustup toolchain install nightly --component rustfmt
+          cargo install cargo-fuzz --version 0.13.1 --locked
+      - name: Build fuzz targets
+        run: |
+          cargo +nightly fmt --manifest-path fuzz/Cargo.toml --all --check
+          cargo +nightly fuzz check
+      - name: Smoke fuzz parsers
+        run: KILO_FUZZ_RUNS=10000 scripts/fuzz-smoke.sh

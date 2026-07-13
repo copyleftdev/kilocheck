@@ -1,0 +1,4 @@
+examine_globs = ["crates/kilo-core/src/**/*.rs"]
+test_workspace = true
+timeout_multiplier = 3.0
+minimum_test_timeout = 20.0

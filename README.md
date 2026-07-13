@@ -45,6 +45,23 @@ cargo test --workspace --locked
 cargo run -p kilo-cli -- capabilities --json
 ```
 
+## Test contract
+
+Fast unit and property tests run on Linux, macOS, and Windows. Linux CI also
+runs mutation analysis over `kilo-core` and smoke-fuzzes every untrusted-input
+parser.
+
+```bash
+scripts/test-all.sh
+scripts/mutate.sh
+KILO_FUZZ_RUNS=10000 scripts/fuzz-smoke.sh
+```
+
+The initial properties cover the complete IPv4 and IPv6 spaces, canonical
+round trips, arbitrary target text, deterministic manifest serialization, and
+the invariant that duplicate upstream evidence never increases independence.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the testing policy.
+
 ## Exit codes
 
 | Code | Meaning |
