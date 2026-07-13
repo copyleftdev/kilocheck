@@ -1,0 +1,109 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v[0-9]+.[0-9]+.[0-9]+*"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-musl
+            package: unix
+            smoke: true
+          - os: macos-14
+            target: x86_64-apple-darwin
+            package: unix
+            smoke: true
+          - os: macos-14
+            target: aarch64-apple-darwin
+            package: unix
+            smoke: false
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            package: windows
+            smoke: true
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - name: Verify tag matches Cargo version
+        shell: bash
+        run: |
+          package_id="$(cargo pkgid --package kilo-cli)"
+          version="${package_id##*#}"
+          test "${GITHUB_REF_NAME}" = "v${version}"
+      - name: Install Linux linker
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes musl-tools
+      - name: Install Rust target
+        run: rustup target add ${{ matrix.target }}
+      - name: Build release binary
+        run: cargo build --locked --release --package kilo-cli --target ${{ matrix.target }}
+      - name: Smoke release binary
+        if: matrix.package == 'unix' && matrix.smoke
+        run: target/${{ matrix.target }}/release/kilo --version
+      - name: Smoke release binary
+        if: matrix.package == 'windows' && matrix.smoke
+        shell: pwsh
+        run: target/${{ matrix.target }}/release/kilo.exe --version
+      - name: Package Unix release
+        if: matrix.package == 'unix'
+        run: scripts/package-unix.sh "${GITHUB_REF_NAME}" "${{ matrix.target }}"
+      - name: Package Windows release
+        if: matrix.package == 'windows'
+        shell: pwsh
+        run: scripts/package-windows.ps1 -Tag "${env:GITHUB_REF_NAME}" -Target "${{ matrix.target }}"
+      - name: Upload release archive
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f
+        with:
+          name: release-${{ matrix.target }}
+          path: dist/*
+          if-no-files-found: error
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - name: Download release archives
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          pattern: release-*
+          path: dist
+          merge-multiple: true
+      - name: Verify release checksums
+        run: |
+          cd dist
+          for checksum in *.sha256; do sha256sum --check "$checksum"; done
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@a2bbfa25375fe432b6a289bc6b6cd05ecd0c4c32
+        with:
+          subject-path: |
+            dist/*.tar.gz
+            dist/*.zip
+      - name: Publish GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${GITHUB_REF_NAME}" dist/* \
+            --repo "${GITHUB_REPOSITORY}" \
+            --title "KiloCheck ${GITHUB_REF_NAME}" \
+            --notes-file "docs/release-notes/${GITHUB_REF_NAME}.md" \
+            --verify-tag
