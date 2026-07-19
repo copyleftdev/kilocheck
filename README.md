@@ -1,5 +1,7 @@
 # K1L0CH3CK // KiloCheck
 
+[![Tip my tokens](https://tokentip.to/badge/copyleftdev.svg?logo=1)](https://tokentip.to/@copyleftdev)
+
 <p align="center">
   <img src="./site/assets/kilocheck-bbs.webp" width="720" alt="KiloCheck BBS ANSI-art skull and crossbones logo">
 </p>
